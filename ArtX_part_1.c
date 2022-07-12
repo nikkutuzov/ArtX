@@ -17,21 +17,22 @@
 #include <ev.h>
 
 void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-  // буфер
+  // создаем буфер
   char buffer[1024];
 
   // читаем
-  ssize_t r = recv(watcher->fd, buffer, 1024, MSG_NOSIGNAL);
+  // чтобы работало на windows меняем ssize_t на int
+  ssize_t read_count = recv(watcher->fd, buffer, 1024, MSG_NOSIGNAL);
 
   // обрабатываем ошибку
-  if (r < 0) { return; }
+  if (read_count < 0) { return; }
 
-  if (r == 0) { // соединение закрылось
-    ev_io_stop(loop, watcher);
-    free(watcher);
+  if (read_count == 0) { // соединение закрылось
+    ev_io_stop(loop, watcher); // останавливаем watcher
+    free(watcher); // высвобождаем память
     return;
   } else { // иначе передаем
-    send(watcher->fd, buffer, r, MSG_NOSIGNAL);
+    send(watcher->fd, buffer, read_count, MSG_NOSIGNAL);
   }
 }
 
@@ -40,6 +41,8 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
   int client_socket = accept(watcher->fd, NULL, NULL);
 
   // watcher на чтение
+  // выделяем память чтобы при выходе из call_back область видимости
+  // структуры сохранилась в КУЧЕ
   struct ev_io *w_client = (struct ev_io*) malloc(sizeof(struct ev_io));
   ev_io_init (w_client, read_cb, client_socket, EV_READ);
   ev_io_start(loop, w_client);
@@ -61,6 +64,8 @@ int main() {
 
   // адрес
   struct sockaddr_in address;
+  // занулим
+  bzero(&address, sizeof(address));
   address.sin_family = AF_INET; // Internet-домен
   address.sin_port = htons(port_number); // номер порта
   address.sin_addr.s_addr = htonl(INADDR_ANY); // IP-адрес хоста
@@ -72,11 +77,12 @@ int main() {
   }
 
   // открываем слушающий TCP сокет
-  listen(sock, 1);
+  listen(sock, SOMAXCONN);
 
   // инициализируем watcher
   struct ev_io w_accept;
   ev_io_init(&w_accept, accept_cb, sock, EV_READ);
+  // запускаем
   ev_io_start(loop, &w_accept);
 
   while (1) { ev_loop(loop, 0); }
