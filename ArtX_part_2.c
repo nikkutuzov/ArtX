@@ -30,6 +30,7 @@ void Listen(int sockfd, int backlog);
 int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 void Send(int sockfd, const void *buf, size_t len, int flags);
 ssize_t Recv(int sockfd, void *buf, size_t len, int flags);
+void Shutdown(int sockfd, int how);
 void Close(int fd);
 
 void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
@@ -92,6 +93,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
   if (read_count == 0) {
     ev_io_stop(loop, watcher);
+    Shutdown(watcher->fd, SHUT_RDWR);
     Close(watcher->fd);
     free(watcher);
     return;
@@ -161,6 +163,14 @@ void Send(int sockfd, const void *buf, size_t len, int flags) {
       perror("send_err!");
       exit(EXIT_FAILURE);
     }
+}
+
+void Shutdown(int sockfd, int how) {
+  int res = shutdown(sockfd, how);
+  if (res == -1) {
+    perror("shutdown_err!");
+    exit(EXIT_FAILURE);
+  }
 }
 
 void Close(int fd) {

@@ -23,6 +23,7 @@ int Socket(int domain, int type, int protocol);
 void Bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 void Listen(int sockfd, int backlog);
 int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+void Shutdown(int sockfd, int how);
 void Close(int fd);
 
 void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
@@ -111,6 +112,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
   if (read_count == 0) { // соединение закрылось
     ev_io_stop(loop, watcher); // останавливаем watcher
+    Shutdown(watcher->fd, SHUT_RDWR);
     Close(watcher->fd);
     free(watcher); // высвобождаем память
     return;
@@ -142,6 +144,14 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
   struct ev_io *w_client = (struct ev_io*) malloc(sizeof(struct ev_io));
   ev_io_init (w_client, read_cb, client_socket, EV_READ);
   ev_io_start(loop, w_client);
+}
+
+void Shutdown(int sockfd, int how) {
+  int res = shutdown(sockfd, how);
+  if (res == -1) {
+    perror("shutdown_err!");
+    exit(EXIT_FAILURE);
+  }
 }
 
 void Close(int fd) {
