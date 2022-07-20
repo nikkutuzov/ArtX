@@ -30,7 +30,6 @@ void Listen(int sockfd, int backlog);
 int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 void Send(int sockfd, const void *buf, size_t len, int flags);
 ssize_t Recv(int sockfd, void *buf, size_t len, int flags);
-void Shutdown(int sockfd, int how);
 void Close(int fd);
 
 void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
@@ -83,6 +82,30 @@ void *MyThreadFun(void *args) {
   }
 
   return NULL;
+}
+
+void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
+  char buffer[1024];
+  ssize_t read_count = Recv(watcher->fd, buffer, 1024, MSG_NOSIGNAL);
+
+  if (read_count < 0) { return; }
+
+  if (read_count == 0) {
+    ev_io_stop(loop, watcher);
+    Close(watcher->fd);
+    free(watcher);
+    return;
+  } else {
+    Send(watcher->fd, buffer, read_count, MSG_NOSIGNAL);
+  }
+}
+
+void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
+  int client_socket = Accept(watcher->fd, NULL, 0);
+  struct ev_io *w_client = (struct ev_io*) malloc(sizeof(struct ev_io));
+
+  ev_io_init (w_client, read_cb, client_socket, EV_READ);
+  ev_io_start(loop, w_client);
 }
 
 int Socket(int domain, int type, int protocol) {
@@ -140,25 +163,10 @@ void Send(int sockfd, const void *buf, size_t len, int flags) {
     }
 }
 
-void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-  char buffer[1024];
-  ssize_t read_count = Recv(watcher->fd, buffer, 1024, MSG_NOSIGNAL);
-
-  if (read_count < 0) { return; }
-
-  if (read_count == 0) {
-    ev_io_stop(loop, watcher);
-    free(watcher);
-    return;
-  } else {
-    Send(watcher->fd, buffer, read_count, MSG_NOSIGNAL);
+void Close(int fd) {
+  int res = close(fd);
+  if (res == -1) {
+    perror("close_err!");
+    exit(EXIT_FAILURE);
   }
-}
-
-void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-  int client_socket = Accept(watcher->fd, NULL, 0);
-  struct ev_io *w_client = (struct ev_io*) malloc(sizeof(struct ev_io));
-
-  ev_io_init (w_client, read_cb, client_socket, EV_READ);
-  ev_io_start(loop, w_client);
 }

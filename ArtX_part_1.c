@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -22,6 +23,8 @@ int Socket(int domain, int type, int protocol);
 void Bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 void Listen(int sockfd, int backlog);
 int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+void Close(int fd);
+
 void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents);
 
@@ -108,6 +111,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
   if (read_count == 0) { // соединение закрылось
     ev_io_stop(loop, watcher); // останавливаем watcher
+    Close(watcher->fd);
     free(watcher); // высвобождаем память
     return;
   } else { // иначе передаем
@@ -138,4 +142,12 @@ void accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
   struct ev_io *w_client = (struct ev_io*) malloc(sizeof(struct ev_io));
   ev_io_init (w_client, read_cb, client_socket, EV_READ);
   ev_io_start(loop, w_client);
+}
+
+void Close(int fd) {
+  int res = close(fd);
+  if (res == -1) {
+    perror("close_err!");
+    exit(EXIT_FAILURE);
+  }
 }
